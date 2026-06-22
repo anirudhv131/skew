@@ -17,7 +17,7 @@ function guessCat(t){ t=t.toLowerCase();
 
 // Fetch from current Kalshi API v2 (api.kalshi.com, not deprecated trading-api)
 async function getKalshi(debug){
-  const url = "https://api.kalshi.com/trade-api/v2/markets?limit=1000&status=open";
+  const url = "https://external-api.kalshi.com/trade-api/v2/markets?limit=1000&status=open";
   try{
     const r = await fetch(url, { headers:{accept:"application/json"} });
     if(!r.ok){ 
@@ -26,7 +26,6 @@ async function getKalshi(debug){
       return []; 
     }
     const text = await r.text();
-    debug.kalshiRaw = text.slice(0, 200);
     const j = JSON.parse(text);
     const raw = (j.markets||[]);
     const now = new Date();
@@ -46,7 +45,6 @@ async function getKalshi(debug){
     return out;
   }catch(e){ 
     debug.errors.push("kalshi "+String(e.message)); 
-    debug.kalshiUrl = url;
     return []; 
   }
 }
