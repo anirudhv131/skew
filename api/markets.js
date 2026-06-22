@@ -30,20 +30,15 @@ async function getKalshi(debug){
     const raw = (j.markets||[]);
     const now = new Date();
     debug.kalshiCount = raw.length;
-    const out = raw.map((m, idx)=>{
-      if(idx >= 5) return null; // Only process first 5 for debugging
-      const bid=m.yes_bid, ask=m.yes_ask;
-      let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : (m.last_price!=null?m.last_price:null);
-      if(yes!=null && yes<=1) yes = yes*100;
+    const out = raw.map(m=>{
+      // Kalshi returns prices in dollars (0.00-1.00), convert to cents (0-100)
+      const bid = m.yes_bid_dollars;
+      const ask = m.yes_ask_dollars;
+      let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : null;
+      if(yes!=null) yes = Math.round(yes * 100);
+      
       const resolves = (m.close_time||m.expiration_time||"").slice(0,10);
-      debug.kalshiDebug = (debug.kalshiDebug || []).concat({
-        title:m.title?.slice(0,20),
-        bid: m.yes_bid,
-        ask: m.yes_ask,
-        last: m.last_price,
-        yes: yes ? Math.round(yes) : null
-      });
-      return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves };
+      return yes==null ? null : { title:(m.title||m.ticker), yes, resolves };
     }).filter(Boolean);
     return out.filter(m=>m.yes>2 && m.yes<98);
   }catch(e){ 
