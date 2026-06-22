@@ -40,7 +40,12 @@ async function getKalshi(debug){
       const resolves = (m.close_time||m.expiration_time||"").slice(0,10);
       return yes==null ? null : { title:(m.title||m.ticker), yes, resolves };
     }).filter(Boolean);
-    return out.filter(m=>m.yes>2 && m.yes<98);
+    
+    debug.kalshiSample = out.slice(0, 10).map(m => ({ t: m.title.slice(0,30), y: m.yes }));
+    debug.kalshiTotal = out.length;
+    const filtered = out.filter(m=>m.yes>2 && m.yes<98);
+    debug.kalshiInRange = filtered.length;
+    return filtered;
   }catch(e){ 
     debug.errors.push("kalshi "+String(e.message)); 
     return []; 
