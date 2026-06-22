@@ -30,12 +30,23 @@ async function getKalshi(debug){
     const raw = (j.markets||[]);
     const now = new Date();
     debug.kalshiCount = raw.length;
+    debug.kalshiRawMarket = raw[0] ? JSON.stringify(raw[0]).slice(0, 500) : "no markets";
+    
     const out = raw.map(m=>{
-      // Kalshi returns prices in dollars (0.00-1.00), convert to cents (0-100)
-      const bid = m.yes_bid_dollars;
-      const ask = m.yes_ask_dollars;
-      let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : null;
-      if(yes!=null) yes = Math.round(yes * 100);
+      // Try all possible field names for bid/ask prices
+      const bid = m.yes_bid_dollars || m.yes_bid || m.bid || m.yesBid;
+      const ask = m.yes_ask_dollars || m.yes_ask || m.ask || m.yesAsk;
+      const last = m.last_price || m.lastPrice || m.last || m.midPrice;
+      
+      let yes = null;
+      if(bid != null && ask != null && (bid + ask) > 0) {
+        yes = (bid + ask) / 2;
+      } else if(last != null) {
+        yes = last;
+      }
+      
+      if(yes != null && yes <= 1) yes = yes * 100;
+      if(yes != null) yes = Math.round(yes);
       
       const resolves = (m.close_time||m.expiration_time||"").slice(0,10);
       return yes==null ? null : { title:(m.title||m.ticker), yes, resolves };
