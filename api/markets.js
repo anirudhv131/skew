@@ -30,17 +30,22 @@ async function getKalshi(debug){
     const raw = (j.markets||[]);
     const now = new Date();
     debug.kalshiCount = raw.length;
-    const out = raw.map(m=>{
+    const out = raw.map((m, idx)=>{
+      if(idx >= 5) return null; // Only process first 5 for debugging
       const bid=m.yes_bid, ask=m.yes_ask;
       let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : (m.last_price!=null?m.last_price:null);
       if(yes!=null && yes<=1) yes = yes*100;
       const resolves = (m.close_time||m.expiration_time||"").slice(0,10);
+      debug.kalshiDebug = (debug.kalshiDebug || []).concat({
+        title:m.title?.slice(0,20),
+        bid: m.yes_bid,
+        ask: m.yes_ask,
+        last: m.last_price,
+        yes: yes ? Math.round(yes) : null
+      });
       return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves };
     }).filter(Boolean);
-    debug.kalshiSample = out.slice(0,5).map(m=>({t:m.title.slice(0,25), y:m.yes}));
-    const filtered = out.filter(m=>m.yes>2 && m.yes<98);
-    debug.kalshiFiltered = filtered.length;
-    return filtered;
+    return out.filter(m=>m.yes>2 && m.yes<98);
   }catch(e){ 
     debug.errors.push("kalshi "+String(e.message)); 
     return []; 
