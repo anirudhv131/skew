@@ -30,33 +30,28 @@ async function getKalshi(debug){
     const raw = (j.markets||[]);
     const now = new Date();
     debug.kalshiCount = raw.length;
-    debug.kalshiRawMarket = raw[0] ? JSON.stringify(raw[0]).slice(0, 500) : "no markets";
-    
     const out = raw.map(m=>{
-      // Try all possible field names for bid/ask prices
-      const bid = m.yes_bid_dollars || m.yes_bid || m.bid || m.yesBid;
-      const ask = m.yes_ask_dollars || m.yes_ask || m.ask || m.yesAsk;
-      const last = m.last_price || m.lastPrice || m.last || m.midPrice;
+      // Skip multivariate/custom strike markets - they don't have simple yes/no prices
+      if(m.strike_type && m.strike_type !== 'standard') return null;
+      if(m.custom_strike) return null;
+      
+      // Kalshi returns prices as integers 1-99 (cents), not dollars
+      const bid = m.yes_bid;
+      const ask = m.yes_ask;
+      const last = m.last_price;
       
       let yes = null;
       if(bid != null && ask != null && (bid + ask) > 0) {
-        yes = (bid + ask) / 2;
+        yes = Math.round((bid + ask) / 2);
       } else if(last != null) {
         yes = last;
       }
-      
-      if(yes != null && yes <= 1) yes = yes * 100;
-      if(yes != null) yes = Math.round(yes);
       
       const resolves = (m.close_time||m.expiration_time||"").slice(0,10);
       return yes==null ? null : { title:(m.title||m.ticker), yes, resolves };
     }).filter(Boolean);
     
-    debug.kalshiSample = out.slice(0, 10).map(m => ({ t: m.title.slice(0,30), y: m.yes }));
-    debug.kalshiTotal = out.length;
-    const filtered = out.filter(m=>m.yes>2 && m.yes<98);
-    debug.kalshiInRange = filtered.length;
-    return filtered;
+    return out.filter(m=>m.yes>2 && m.yes<98);
   }catch(e){ 
     debug.errors.push("kalshi "+String(e.message)); 
     return []; 
