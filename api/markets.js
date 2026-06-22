@@ -36,8 +36,11 @@ async function getKalshi(debug){
       if(yes!=null && yes<=1) yes = yes*100;
       const resolves = (m.close_time||m.expiration_time||"").slice(0,10);
       return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves };
-    }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
-    return out;
+    }).filter(Boolean);
+    debug.kalshiSample = out.slice(0,5).map(m=>({t:m.title.slice(0,25), y:m.yes}));
+    const filtered = out.filter(m=>m.yes>2 && m.yes<98);
+    debug.kalshiFiltered = filtered.length;
+    return filtered;
   }catch(e){ 
     debug.errors.push("kalshi "+String(e.message)); 
     return []; 
