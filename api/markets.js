@@ -15,50 +15,42 @@ function guessCat(t){ t=t.toLowerCase();
   return "Other";
 }
 
-// Try several known Kalshi hosts; return the first that yields markets. Records attempts.
+// Fetch from current Kalshi API v2 (api.kalshi.com, not deprecated trading-api)
 async function getKalshi(debug){
-  const hosts = [
-    "https://api.elections.kalshi.com/trade-api/v2/markets?limit=1000",
-    "https://external-api.kalshi.com/trade-api/v2/markets?limit=1000",
-    "https://trading-api.kalshi.com/trade-api/v2/markets?limit=1000",
-  ];
-  for(const url of hosts){
-    try{
-      const r = await fetch(url, { headers:{accept:"application/json"} });
-      const host = url.split("/")[2];
-      if(!r.ok){ debug.kalshiAttempts.push(host+" -> HTTP "+r.status); continue; }
-      const j = await r.json();
-      const raw = (j.markets||[]);
-      debug.kalshiAttempts.push(host+" -> "+raw.length+" raw");
-      if(!raw.length) continue;
-      const out = raw.map(m=>{
-        const bid=m.yes_bid, ask=m.yes_ask;
-        let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : (m.last_price!=null?m.last_price:null);
-        if(yes!=null && yes<=1) yes = yes*100;
-        return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves:(m.close_time||m.expiration_time||"").slice(0,10) };
-      }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
-      debug.kalshiHost = host;
-      return out;
-    }catch(e){ debug.kalshiAttempts.push("err "+String(e.message)); }
-  }
-  return [];
+  const url = "https://api.kalshi.com/trade-api/v2/markets?limit=1000&status=open";
+  try{
+    const r = await fetch(url, { headers:{accept:"application/json"} });
+    if(!r.ok){ debug.errors.push("kalshi HTTP "+r.status); return []; }
+    const j = await r.json();
+    const raw = (j.markets||[]);
+    debug.kalshiCount = raw.length;
+    const out = raw.map(m=>{
+      const bid=m.yes_bid, ask=m.yes_ask;
+      let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : (m.last_price!=null?m.last_price:null);
+      if(yes!=null && yes<=1) yes = yes*100;
+      return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves:(m.close_time||m.expiration_time||"").slice(0,10) };
+    }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
+    return out;
+  }catch(e){ debug.errors.push("kalshi "+String(e.message)); return []; }
 }
 
 async function getPolymarket(debug){
   const url = "https://gamma-api.polymarket.com/markets?active=true&closed=false&order=volume24hr&ascending=false&limit=500";
-  const r = await fetch(url, { headers:{accept:"application/json"} });
-  if(!r.ok){ debug.errors.push("polymarket HTTP "+r.status); return []; }
-  const arr = await r.json();
-  debug.polyRaw = (arr||[]).length;
-  return (arr||[]).map(m=>{
-    let prices, outs;
-    try{ prices=JSON.parse(m.outcomePrices||"[]"); outs=JSON.parse(m.outcomes||"[]"); }catch{ return null; }
-    if(!Array.isArray(outs)||outs.length!==2) return null;
-    if(!/yes/i.test(outs[0]) && !/yes/i.test(outs[1])) return null;
-    const yi=/yes/i.test(outs[0])?0:1;
-    const yes=Math.round(parseFloat(prices[yi])*100);
-    return isNaN(yes)?null:{ title:m.question, yes, resolves:(m.endDate||"").slice(0,10) };
-  }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
+  try{
+    const r = await fetch(url, { headers:{accept:"application/json"} });
+    if(!r.ok){ debug.errors.push("polymarket HTTP "+r.status); return []; }
+    const arr = await r.json();
+    debug.polyCount = (arr||[]).length;
+    return (arr||[]).map(m=>{
+      let prices, outs;
+      try{ prices=JSON.parse(m.outcomePrices||"[]"); outs=JSON.parse(m.outcomes||"[]"); }catch{ return null; }
+      if(!Array.isArray(outs)||outs.length!==2) return null;
+      if(!/yes/i.test(outs[0]) && !/yes/i.test(outs[1])) return null;
+      const yi=/yes/i.test(outs[0])?0:1;
+      const yes=Math.round(parseFloat(prices[yi])*100);
+      return isNaN(yes)?null:{ title:m.question, yes, resolves:(m.endDate||"").slice(0,10) };
+    }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
+  }catch(e){ debug.errors.push("polymarket "+String(e.message)); return []; }
 }
 
 export default async function handler(req,res){
@@ -68,7 +60,7 @@ export default async function handler(req,res){
   try{ kalshi=await getKalshi(debug); }catch(e){ debug.errors.push("kalshi "+String(e.message)); }
   try{ poly=await getPolymarket(debug); }catch(e){ debug.errors.push("poly "+String(e.message)); }
 
-  const THRESHOLD=0.75, pairs=[], used=new Set();
+  const THRESHOLD=0.65, pairs=[], used=new Set();
   for(const k of kalshi){
     let best=null, score=THRESHOLD;
     for(let i=0;i<poly.length;i++){ 
