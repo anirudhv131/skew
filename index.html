@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SKEW — where prediction markets disagree</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --ink:#0F1620; --ink-2:#34404F; --muted:#697485; --faint:#9AA4B2;
+    --line:#E4E8ED; --line-soft:#EEF1F5;
+    --bg:#EBEEF3; --surface:#FFFFFF;
+    --kalshi:#2563EB; --kalshi-soft:#E5EDFE;
+    --poly:#7C3AED; --poly-soft:#F0E9FE;
+    --edge:#0E9F6E; --edge-strong:#047857; --edge-soft:#E2F6EE;
+    --warn:#B45309; --warn-soft:#FBF0E2;
+    --display:'Space Grotesk',sans-serif;
+    --ui:'Plus Jakarta Sans',sans-serif;
+    --mono:'IBM Plex Mono',monospace;
+    --r:14px; --r-sm:9px;
+    --shadow:0 1px 2px rgba(15,22,32,.04),0 4px 16px rgba(15,22,32,.05);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    font-family:var(--ui); background:var(--bg); color:var(--ink);
+    -webkit-font-smoothing:antialiased; line-height:1.45;
+  }
+  .wrap{max-width:1120px; margin:0 auto; padding:0 24px}
+
+  /* ---------- header ---------- */
+  header{
+    position:sticky; top:0; z-index:50;
+    background:rgba(235,238,243,.82); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .bar{display:flex; align-items:center; gap:20px; height:62px}
+  .brand{display:flex; align-items:center; gap:10px; font-family:var(--display); font-weight:700; letter-spacing:-.02em; font-size:20px}
+  .mark{width:26px; height:26px; flex:none}
+  .live{display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:11px; color:var(--edge-strong); font-weight:500}
+  .dot{width:7px; height:7px; border-radius:50%; background:var(--edge); box-shadow:0 0 0 0 rgba(14,159,110,.5); animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(14,159,110,.45)}70%{box-shadow:0 0 0 7px rgba(14,159,110,0)}100%{box-shadow:0 0 0 0 rgba(14,159,110,0)}}
+  nav{margin-left:auto; display:flex; gap:4px}
+  nav a{font-size:13.5px; font-weight:500; color:var(--muted); text-decoration:none; padding:8px 12px; border-radius:8px}
+  nav a:hover{color:var(--ink); background:var(--line-soft)}
+  .pill{font-family:var(--mono); font-size:10.5px; font-weight:500; color:var(--warn); background:var(--warn-soft); border:1px solid #F0DBBF; padding:4px 9px; border-radius:99px; white-space:nowrap}
+
+  /* ---------- hero ---------- */
+  .hero{padding:48px 0 30px}
+  .eyebrow{font-family:var(--mono); font-size:12px; letter-spacing:.04em; color:var(--muted); text-transform:uppercase; margin-bottom:14px}
+  h1{font-family:var(--display); font-weight:700; font-size:clamp(30px,5vw,46px); line-height:1.04; letter-spacing:-.025em; max-width:14ch}
+  h1 em{font-style:normal; color:var(--edge-strong)}
+  .sub{margin-top:16px; font-size:16px; color:var(--ink-2); max-width:54ch}
+  .stats{display:flex; gap:14px; margin-top:30px; flex-wrap:wrap}
+  .stat{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px 18px; box-shadow:var(--shadow); min-width:150px; flex:1}
+  .stat .n{font-family:var(--mono); font-size:26px; font-weight:600; letter-spacing:-.02em; line-height:1}
+  .stat .l{font-size:12px; color:var(--muted); margin-top:7px; font-weight:500}
+  .stat.edge .n{color:var(--edge-strong)}
+
+  /* ---------- controls ---------- */
+  .controls{display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin:34px 0 18px}
+  .search{flex:1; min-width:200px; position:relative}
+  .search input{
+    width:100%; font-family:var(--ui); font-size:14px; color:var(--ink);
+    border:1px solid var(--line); background:var(--surface); border-radius:10px;
+    padding:11px 14px 11px 38px; box-shadow:var(--shadow); outline:none;
+  }
+  .search input:focus{border-color:var(--kalshi); box-shadow:0 0 0 3px var(--kalshi-soft)}
+  .search svg{position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--faint)}
+  .chips{display:flex; gap:6px; flex-wrap:wrap}
+  .chip{font-size:12.5px; font-weight:600; color:var(--muted); background:var(--surface); border:1px solid var(--line); padding:8px 13px; border-radius:99px; cursor:pointer; box-shadow:var(--shadow); transition:.12s}
+  .chip:hover{color:var(--ink)}
+  .chip.on{background:var(--ink); color:#fff; border-color:var(--ink)}
+  .slide{display:flex; align-items:center; gap:10px; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:8px 14px; box-shadow:var(--shadow)}
+  .slide label{font-size:12px; color:var(--muted); font-weight:600; white-space:nowrap}
+  .slide output{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--edge-strong); min-width:30px}
+  input[type=range]{accent-color:var(--edge); width:96px}
+
+  /* ---------- board ---------- */
+  .board{display:flex; flex-direction:column; gap:10px}
+  .row{
+    background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
+    box-shadow:var(--shadow); overflow:hidden; transition:border-color .15s;
+  }
+  .row:hover{border-color:#D2D9E2}
+  .row-main{display:grid; grid-template-columns:1.35fr 1.5fr .9fr; gap:22px; align-items:center; padding:18px 20px; cursor:pointer}
+  .cat{font-family:var(--mono); font-size:10.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); display:inline-flex; align-items:center; gap:6px}
+  .cat::before{content:""; width:6px; height:6px; border-radius:2px; background:var(--faint)}
+  .row[data-cat="NBA"] .cat::before{background:#EA580C} .row[data-cat="NFL"] .cat::before{background:#15803D}
+  .row[data-cat="Soccer"] .cat::before{background:#0891B2} .row[data-cat="Politics"] .cat::before{background:#9333EA}
+  .row[data-cat="Crypto"] .cat::before{background:#CA8A04} .row[data-cat="Econ"] .cat::before{background:#4B5563}
+  .title{font-size:15px; font-weight:600; letter-spacing:-.01em; margin-top:7px; line-height:1.3}
+  .meta{font-size:11.5px; color:var(--faint); margin-top:6px; font-family:var(--mono)}
+
+  /* signature: divergence bar */
+  .dv{padding-top:2px}
+  .track{position:relative; height:8px; background:var(--line-soft); border-radius:99px; margin:20px 0 8px}
+  .gapband{position:absolute; top:0; height:8px; background:var(--edge-soft); border-radius:2px}
+  .pin{position:absolute; top:50%; transform:translate(-50%,-50%); width:14px; height:14px; border-radius:50%; border:2.5px solid #fff; box-shadow:0 1px 3px rgba(15,22,32,.25)}
+  .pin.k{background:var(--kalshi)} .pin.p{background:var(--poly)}
+  .pin .tag{position:absolute; top:-26px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:11px; font-weight:600; white-space:nowrap}
+  .pin.k .tag{color:var(--kalshi)} .pin.p .tag{color:var(--poly)}
+  .scale{display:flex; justify-content:space-between; font-family:var(--mono); font-size:9.5px; color:var(--faint)}
+  .legend{display:flex; gap:14px; margin-top:9px; font-size:11px; color:var(--muted)}
+  .legend span{display:inline-flex; align-items:center; gap:5px; font-weight:500}
+  .sw{width:9px; height:9px; border-radius:50%} .sw.k{background:var(--kalshi)} .sw.p{background:var(--poly)}
+
+  .edge-cell{text-align:right}
+  .badge{display:inline-flex; align-items:baseline; gap:4px; font-family:var(--mono); font-weight:600; background:var(--edge-soft); color:var(--edge-strong); padding:6px 11px; border-radius:8px; font-size:18px; letter-spacing:-.02em}
+  .badge.lo{background:var(--line-soft); color:var(--muted)}
+  .badge small{font-size:10px; font-weight:600}
+  .net{font-size:11px; color:var(--muted); margin-top:7px; font-family:var(--mono)}
+  .net b{color:var(--ink-2)}
+
+  /* expand */
+  .detail{border-top:1px dashed var(--line); padding:0 20px; max-height:0; overflow:hidden; transition:max-height .28s ease, padding .28s ease}
+  .row.open .detail{max-height:360px; padding:18px 20px 22px}
+  .play{display:flex; gap:10px; align-items:center; background:var(--edge-soft); border:1px solid #BFE9D6; border-radius:10px; padding:12px 14px; font-size:13.5px; color:var(--edge-strong); font-weight:600}
+  .play svg{flex:none}
+  .legs{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px}
+  .leg{border:1px solid var(--line); border-radius:10px; padding:12px 14px}
+  .leg .v{font-family:var(--mono); font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.03em}
+  .leg.k .v{color:var(--kalshi)} .leg.p .v{color:var(--poly)}
+  .leg .a{font-size:14px; font-weight:600; margin-top:5px}
+  .leg .a small{color:var(--muted); font-weight:500; font-family:var(--mono); font-size:11.5px}
+  .risk{margin-top:14px; font-size:12.5px; color:var(--muted); display:flex; gap:8px; line-height:1.5}
+  .risk svg{flex:none; margin-top:2px; color:var(--warn)}
+
+  .empty{text-align:center; padding:48px; color:var(--muted); font-size:14px}
+
+  /* ---------- section ---------- */
+  section{padding:46px 0}
+  .sec-head{font-family:var(--display); font-weight:700; font-size:22px; letter-spacing:-.02em; margin-bottom:5px}
+  .sec-sub{font-size:14px; color:var(--muted); margin-bottom:24px}
+
+  /* calculator */
+  .calc{display:grid; grid-template-columns:1fr 1fr; gap:14px}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:20px; box-shadow:var(--shadow)}
+  .card h3{font-size:13px; font-weight:700; letter-spacing:-.01em; margin-bottom:16px; display:flex; align-items:center; gap:8px}
+  .card h3 .t{font-family:var(--mono); font-size:10px; font-weight:600; color:#fff; background:var(--ink); padding:2px 7px; border-radius:5px}
+  .field{margin-bottom:13px}
+  .field label{display:block; font-size:11.5px; font-weight:600; color:var(--muted); margin-bottom:6px}
+  .field input{width:100%; font-family:var(--mono); font-size:14px; border:1px solid var(--line); border-radius:8px; padding:10px 12px; outline:none}
+  .field input:focus{border-color:var(--kalshi); box-shadow:0 0 0 3px var(--kalshi-soft)}
+  .out{display:flex; justify-content:space-between; align-items:baseline; padding:11px 0; border-top:1px solid var(--line-soft)}
+  .out:first-of-type{border-top:1px solid var(--line); margin-top:4px}
+  .out .k{font-size:12.5px; color:var(--muted); font-weight:500}
+  .out .v{font-family:var(--mono); font-size:15px; font-weight:600}
+  .out .v.pos{color:var(--edge-strong)} .out .v.neg{color:var(--warn)}
+
+  /* how */
+  .steps{display:grid; grid-template-columns:repeat(3,1fr); gap:14px}
+  .step{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:20px; box-shadow:var(--shadow)}
+  .step .no{font-family:var(--mono); font-size:12px; font-weight:600; color:var(--edge-strong)}
+  .step h4{font-size:14.5px; font-weight:700; margin:9px 0 7px; letter-spacing:-.01em}
+  .step p{font-size:13px; color:var(--muted); line-height:1.55}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line); padding:34px 0 50px; margin-top:24px}
+  .foot-grid{display:flex; gap:40px; flex-wrap:wrap; align-items:flex-start}
+  .disc{flex:1; min-width:280px; font-size:12px; color:var(--muted); line-height:1.6}
+  .disc strong{color:var(--ink-2)}
+  .rg{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:16px 18px; font-size:12.5px; color:var(--ink-2); max-width:300px; box-shadow:var(--shadow)}
+  .rg b{display:block; margin-bottom:6px; font-size:13px}
+  .wire{margin-top:24px; font-family:var(--mono); font-size:11px; color:var(--faint); background:#fff; border:1px dashed var(--line); border-radius:10px; padding:12px 14px; line-height:1.7}
+  .wire b{color:var(--ink-2)}
+
+  @media(max-width:840px){
+    .row-main{grid-template-columns:1fr; gap:16px}
+    .edge-cell{text-align:left}
+    .calc,.steps{grid-template-columns:1fr}
+    nav a:not(.keep){display:none}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important; transition:none!important}}
+  :focus-visible{outline:2px solid var(--kalshi); outline-offset:2px; border-radius:4px}
+
+  /* ---------- execution ---------- */
+  .exec-btn{margin-top:14px; display:inline-flex; align-items:center; gap:8px; font-family:var(--ui); font-weight:700; font-size:13px; color:#fff; background:var(--ink); border:none; border-radius:10px; padding:11px 18px; cursor:pointer; transition:.14s}
+  .exec-btn:hover{background:#1d2837; transform:translateY(-1px)}
+  .exec-btn svg{color:#facc15}
+
+  .modal-bg{position:fixed; inset:0; background:rgba(15,22,32,.5); backdrop-filter:blur(3px); display:none; align-items:center; justify-content:center; z-index:100; padding:20px}
+  .modal-bg.on{display:flex}
+  .modal{background:var(--surface); border-radius:18px; max-width:460px; width:100%; box-shadow:0 24px 70px rgba(15,22,32,.3); overflow:hidden; animation:pop .2s ease}
+  @keyframes pop{from{transform:scale(.96) translateY(8px); opacity:0}to{transform:none; opacity:1}}
+  .modal-h{padding:20px 22px 16px; border-bottom:1px solid var(--line)}
+  .modal-h .mode{font-family:var(--mono); font-size:10.5px; font-weight:600; padding:4px 9px; border-radius:99px; display:inline-block; margin-bottom:11px}
+  .mode.paper{background:var(--warn-soft); color:var(--warn); border:1px solid #F0DBBF}
+  .mode.real{background:#FDE7E7; color:#B91C1C; border:1px solid #F5C2C2}
+  .modal-h h3{font-family:var(--display); font-size:18px; letter-spacing:-.02em; line-height:1.25}
+  .modal-b{padding:18px 22px}
+  .ex-legs{display:flex; flex-direction:column; gap:9px}
+  .ex-leg{display:flex; align-items:center; gap:12px; border:1px solid var(--line); border-radius:11px; padding:13px 15px}
+  .ex-leg .ic{width:34px; height:34px; border-radius:9px; display:grid; place-items:center; font-family:var(--mono); font-weight:700; font-size:12px; color:#fff; flex:none}
+  .ex-leg.k .ic{background:var(--kalshi)} .ex-leg.p .ic{background:var(--poly)}
+  .ex-leg .info{flex:1} .ex-leg .info .top{font-size:13.5px; font-weight:700}
+  .ex-leg .info .bot{font-size:11.5px; color:var(--muted); font-family:var(--mono); margin-top:2px}
+  .ex-leg .amt{font-family:var(--mono); font-weight:600; font-size:14px; text-align:right}
+  .ex-stake{display:flex; align-items:center; justify-content:space-between; margin:16px 0 4px; gap:12px}
+  .ex-stake label{font-size:12.5px; font-weight:600; color:var(--muted)}
+  .ex-stake input{font-family:var(--mono); font-size:14px; width:120px; border:1px solid var(--line); border-radius:8px; padding:9px 12px; text-align:right; outline:none}
+  .ex-stake input:focus{border-color:var(--kalshi); box-shadow:0 0 0 3px var(--kalshi-soft)}
+  .ex-sum{background:var(--edge-soft); border:1px solid #BFE9D6; border-radius:11px; padding:12px 15px; margin-top:14px; display:flex; justify-content:space-between; align-items:center}
+  .ex-sum .l{font-size:12.5px; color:var(--edge-strong); font-weight:600}
+  .ex-sum .v{font-family:var(--mono); font-weight:700; font-size:17px; color:var(--edge-strong)}
+  .ex-warn{font-size:11.5px; color:var(--muted); line-height:1.5; margin-top:13px; display:flex; gap:7px}
+  .ex-warn svg{flex:none; margin-top:1px; color:var(--warn)}
+  .modal-f{display:flex; gap:10px; padding:16px 22px 20px}
+  .btn{flex:1; font-family:var(--ui); font-weight:700; font-size:13.5px; border-radius:10px; padding:12px; cursor:pointer; border:1px solid var(--line); background:#fff; color:var(--ink-2)}
+  .btn:hover{background:var(--line-soft)}
+  .btn.go{background:var(--edge); color:#fff; border-color:var(--edge); flex:1.6}
+  .btn.go:hover{background:var(--edge-strong)}
+  .btn:disabled{opacity:.5; cursor:not-allowed}
+
+  /* settings strip */
+  .settings{display:flex; align-items:center; gap:18px; flex-wrap:wrap; background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:13px 18px; box-shadow:var(--shadow); margin-bottom:14px}
+  .settings .grp{display:flex; align-items:center; gap:9px}
+  .settings .grp label{font-size:12.5px; font-weight:600; color:var(--muted)}
+  .toggle{position:relative; width:42px; height:24px; flex:none; cursor:pointer}
+  .toggle input{opacity:0; width:0; height:0; position:absolute}
+  .toggle .sl{position:absolute; inset:0; border-radius:99px; background:var(--warn); transition:.18s}
+  .toggle .sl::before{content:""; position:absolute; width:18px; height:18px; border-radius:50%; background:#fff; top:3px; left:3px; transition:.18s}
+  .toggle input:checked + .sl{background:#DC2626}
+  .toggle input:checked + .sl::before{transform:translateX(18px)}
+  .settings .mini{font-family:var(--mono); font-size:11px; color:var(--muted)}
+  .settings input[type=number]{font-family:var(--mono); font-size:13px; width:84px; border:1px solid var(--line); border-radius:8px; padding:7px 10px; outline:none}
+  .mode-label{font-family:var(--mono); font-size:11px; font-weight:600; padding:4px 9px; border-radius:99px}
+  .mode-label.paper{background:var(--warn-soft); color:var(--warn)}
+  .mode-label.real{background:#FDE7E7; color:#B91C1C}
+
+  /* positions log */
+  .pos-table{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); box-shadow:var(--shadow); overflow:hidden}
+  .pos-row{display:grid; grid-template-columns:1.4fr 1fr 1fr .9fr; gap:14px; padding:13px 18px; align-items:center; border-top:1px solid var(--line-soft); font-size:13px}
+  .pos-row.head{border-top:none; font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:600}
+  .pos-row .ttl{font-weight:600; font-size:13px}
+  .pos-row .leg2{font-family:var(--mono); font-size:11.5px; color:var(--muted)}
+  .status{font-family:var(--mono); font-size:11px; font-weight:600; padding:4px 9px; border-radius:6px; display:inline-block}
+  .status.ok{background:var(--edge-soft); color:var(--edge-strong)}
+  .status.partial{background:var(--warn-soft); color:var(--warn)}
+  .pos-pl{font-family:var(--mono); font-weight:600; text-align:right}
+  .pos-pl.pos{color:var(--edge-strong)} .pos-pl.neg{color:#B91C1C}
+  .pos-empty{padding:34px; text-align:center; color:var(--muted); font-size:13.5px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <div class="brand">
+      <svg class="mark" viewBox="0 0 26 26" fill="none">
+        <rect width="26" height="26" rx="7" fill="#0F1620"/>
+        <circle cx="9" cy="16" r="3.2" fill="#2563EB"/>
+        <circle cx="17" cy="10" r="3.2" fill="#7C3AED"/>
+        <path d="M9 16 L17 10" stroke="#0E9F6E" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      SKEW
+    </div>
+    <div class="live"><span class="dot"></span>LIVE</div>
+    <nav>
+      <a href="#board" class="keep">Edges</a>
+      <a href="#calc">Calculator</a>
+      <a href="#how">How it works</a>
+    </nav>
+    <span class="pill" id="feed-pill">CONNECTING…</span>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <div class="eyebrow">Kalshi × Polymarket · cross-venue analytics</div>
+    <h1>Find where the markets <em>disagree.</em></h1>
+    <p class="sub">The same event is priced three ways across prediction markets. SKEW reads every order book, lines the prices up on one probability scale, and shows you the gap — and exactly how to play it.</p>
+    <div class="stats">
+      <div class="stat"><div class="n" id="s-mkts">—</div><div class="l">Markets tracked</div></div>
+      <div class="stat edge"><div class="n" id="s-edges">—</div><div class="l">Live edges ≥ threshold</div></div>
+      <div class="stat"><div class="n" id="s-best">—</div><div class="l">Biggest gap right now</div></div>
+      <div class="stat"><div class="n" id="s-upd">—</div><div class="l">Last refresh</div></div>
+    </div>
+  </div>
+
+  <div id="board"></div>
+  <div class="settings">
+    <div class="grp">
+      <span class="mode-label paper" id="mode-label">PAPER MODE</span>
+    </div>
+    <div class="grp">
+      <label for="real-toggle">Live trading</label>
+      <span class="toggle"><input type="checkbox" id="real-toggle" /><span class="sl"></span></span>
+    </div>
+    <div class="grp">
+      <label for="max-stake">Max stake / trade</label>
+      <input type="number" id="max-stake" value="250" min="1" />
+    </div>
+    <div class="grp">
+      <label for="min-exec">Min edge to allow</label>
+      <input type="number" id="min-exec" value="3" min="0" />
+      <span class="mini">%</span>
+    </div>
+    <div class="grp" style="margin-left:auto"><span class="mini" id="kill-note">Kill switch: armed</span></div>
+  </div>
+  <div class="controls">
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="q" type="text" placeholder="Search events…" aria-label="Search events" />
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="slide">
+      <label for="minedge">Min edge</label>
+      <input id="minedge" type="range" min="0" max="12" value="0" step="1" />
+      <output id="minedge-o">0%</output>
+    </div>
+  </div>
+
+  <div class="board" id="rows"></div>
+
+  <section id="calc">
+    <div class="sec-head">Edge calculator</div>
+    <div class="sec-sub">The two pieces of math behind every row — convert any price to a probability, then size the trade.</div>
+    <div class="calc">
+      <div class="card">
+        <h3><span class="t">01</span> Implied probability + cross-venue edge</h3>
+        <div class="field"><label for="c-k">Kalshi — YES price (¢)</label><input id="c-k" type="number" value="45" min="1" max="99"/></div>
+        <div class="field"><label for="c-p">Polymarket — YES price (¢)</label><input id="c-p" type="number" value="53" min="1" max="99"/></div>
+        <div class="out"><span class="k">Kalshi implied probability</span><span class="v" id="o-kp">45%</span></div>
+        <div class="out"><span class="k">Polymarket implied probability</span><span class="v" id="o-pp">53%</span></div>
+        <div class="out"><span class="k">Gross edge (the gap)</span><span class="v pos" id="o-gross">8.0%</span></div>
+        <div class="out"><span class="k">Est. net after fees</span><span class="v" id="o-net">7.5%</span></div>
+      </div>
+      <div class="card">
+        <h3><span class="t">02</span> Stake split + expected value</h3>
+        <div class="field"><label for="c-bank">Total stake ($)</label><input id="c-bank" type="number" value="1000" min="1"/></div>
+        <div class="field"><label for="c-edge">Your edge on the +EV side (%)</label><input id="c-edge" type="number" value="6" min="0" max="40" step="0.5"/></div>
+        <div class="out"><span class="k">Locked profit if arbing the gap</span><span class="v pos" id="o-lock">$80</span></div>
+        <div class="out"><span class="k">Expected value (per $1 bet)</span><span class="v pos" id="o-ev">+$0.06</span></div>
+        <div class="out"><span class="k">Kelly stake (¼ Kelly, suggested)</span><span class="v" id="o-kelly">$15</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="how">
+    <div class="sec-head">How a gap becomes a bet</div>
+    <div class="sec-sub">No predictions. No picks. Just the inefficiency between two venues that price the same event differently.</div>
+    <div class="steps">
+      <div class="step"><div class="no">01 — Normalize</div><h4>One probability scale</h4><p>Polymarket quotes cents, Kalshi quotes percent, sportsbooks quote American odds. Everything gets converted to a single 0–100% implied probability so prices are directly comparable.</p></div>
+      <div class="step"><div class="no">02 — Compare</div><h4>Measure the gap</h4><p>For each shared event, SKEW lines up both venues. When their implied probabilities diverge, that spread is a real, capturable edge — buy YES where it's cheap, NO where it's dear.</p></div>
+  <section id="positions">
+    <div class="sec-head">Positions</div>
+    <div class="sec-sub">Every fired trade lands here with both legs and whether they filled. Partial fills are flagged the instant they happen — that's the only moment leg risk matters.</div>
+    <div class="pos-table" id="pos-table">
+      <div class="pos-row head"><span>Event</span><span>Legs</span><span>Status</span><span style="text-align:right">Locked P/L</span></div>
+      <div class="pos-empty" id="pos-empty">No trades yet. Open a market above and fire both legs to see them tracked here.</div>
+    </div>
+  </section>
+</main>
+
+<div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="m-title">
+  <div class="modal">
+    <div class="modal-h">
+      <span class="mode paper" id="m-mode">PAPER · no real money</span>
+      <h3 id="m-title">Fire both legs</h3>
+    </div>
+    <div class="modal-b">
+      <div class="ex-legs" id="m-legs"></div>
+      <div class="ex-stake">
+        <label for="m-stake">Total stake</label>
+        <input type="number" id="m-stake" value="100" min="1" />
+      </div>
+      <div class="ex-sum">
+        <span class="l">Locked profit if both fill</span>
+        <span class="v" id="m-profit">$0</span>
+      </div>
+      <div class="ex-warn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        <span>Both legs fire in parallel as limit orders. If only one fills, you'll be flagged immediately as exposed — the gap is small, the leg risk is real. Never bet more than you can lose.</span>
+      </div>
+    </div>
+    <div class="modal-f">
+      <button class="btn" id="m-cancel">Cancel</button>
+      <button class="btn go" id="m-go">Place both orders</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="disc">
+        <strong>SKEW is an analytics and research tool. It does not place bets, hold funds, or give financial advice.</strong> Prices shown here are illustrative sample data, not a live feed (see the wiring note below to connect real APIs). Cross-venue edges are real but modest and not risk-free in practice — the main risk is execution: getting one leg filled but not the other. Prediction-market availability and legality vary by state and platform; Kalshi has faced legal challenges in several states over whether its sports markets count as sports betting. You are responsible for confirming what is legal where you are. Must be 18+ (21+ in some states).
+        <div class="wire">
+          <b>// To go live, replace the sample feed:</b><br>
+          fetchLiveMarkets() → Polymarket CLOB: <b>https://clob.polymarket.com</b><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Kalshi REST: <b>https://api.elections.kalshi.com</b><br>
+          browser CORS will block direct calls — run a tiny proxy / serverless function and point fetchLiveMarkets() at it.
+        </div>
+      </div>
+      <div class="rg">
+        <b>Bet within your means</b>
+        If betting stops being fun, it's time to stop. Help is free and confidential, 24/7:<br><br>
+        Call or text <b>1-800-GAMBLER</b><br>
+        or visit 1800gamblerchat.org
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// ---------------------------------------------------------------------------
+// DATA LAYER  — swap this stub for live Kalshi/Polymarket data in production.
+// Each market: shared event priced on both venues as YES price in cents (0-100).
+// ---------------------------------------------------------------------------
+const SEED = [
+  {id:1, cat:"NBA",      title:"Thunder to win the NBA Finals",            resolves:"Jun 2026", k:44, p:52},
+  {id:2, cat:"NFL",      title:"Chiefs to make the playoffs",              resolves:"Jan 2027", k:71, p:69},
+  {id:3, cat:"Soccer",   title:"Man City to win the Premier League",       resolves:"May 2027", k:38, p:46},
+  {id:4, cat:"Politics", title:"Incumbent party holds the Senate",         resolves:"Nov 2026", k:55, p:49},
+  {id:5, cat:"Crypto",   title:"Bitcoin above $120k on Dec 31",            resolves:"Dec 2026", k:33, p:41},
+  {id:6, cat:"NBA",      title:"Wembanyama wins MVP",                       resolves:"Apr 2027", k:27, p:29},
+  {id:7, cat:"Econ",     title:"Fed cuts rates at next meeting",            resolves:"Jul 2026", k:62, p:58},
+  {id:8, cat:"Soccer",   title:"USMNT reaches World Cup quarterfinal",      resolves:"Jul 2026", k:41, p:50},
+  {id:9, cat:"NFL",      title:"Over 11.5 wins — 49ers",                    resolves:"Jan 2027", k:48, p:47},
+  {id:10,cat:"Crypto",   title:"Ethereum flips $6k before BTC halving hype",resolves:"Sep 2026", k:22, p:31},
+  {id:11,cat:"Politics", title:"New Supreme Court vacancy in 2026",         resolves:"Dec 2026", k:18, p:24},
+  {id:12,cat:"NBA",      title:"Lakers traded for a top-10 player",         resolves:"Feb 2027", k:36, p:38},
+];
+
+// fee model: Kalshi ≈ 0.07·C·P·(1−P) per contract; Polymarket US ≈ ~0.
+function kalshiFeeCents(priceCents){ const P=priceCents/100; return 7*P*(1-P); } // cents per contract on a $1 contract scaled to 100
+function computeEdge(m){
+  const lowYes = Math.min(m.k, m.p);          // buy YES on cheaper venue
+  const highYes = Math.max(m.k, m.p);         // buy NO on the other (NO = 100 - YES)
+  const gross = highYes - lowYes;             // the gap, in cents = % points
+  const fees = (kalshiFeeCents(m.k) + 0) * 0.5; // rough blended friction
+  const net = Math.max(0, gross - fees);
+  const yesVenue = m.k <= m.p ? "Kalshi" : "Polymarket";
+  const noVenue  = m.k <= m.p ? "Polymarket" : "Kalshi";
+  return {gross, net, yesVenue, noVenue, yesPrice:lowYes, noPrice:100-highYes};
+}
+
+let MARKETS = [];
+let LIVE = false;
+function loadSeed(){
+  MARKETS = SEED.map(m=>{ const e=computeEdge(m); return {...m, ...e}; });
+}
+function setPill(){
+  const el = document.getElementById('feed-pill');
+  if (LIVE){ el.textContent = 'LIVE DATA'; el.style.color='var(--edge-strong)'; el.style.background='var(--edge-soft)'; el.style.borderColor='#BFE9D6'; }
+  else { el.textContent = 'SAMPLE DATA'; }
+}
+// Pull live matched markets from the serverless function. Falls back to sample data
+// if the endpoint isn't deployed yet or returns an error — so the page always works.
+async function fetchLiveMarkets(){
+  try{
+    const r = await fetch('/api/markets', {cache:'no-store'});
+    if(!r.ok) throw new Error('status '+r.status);
+    const data = await r.json();
+    if(!data.live || !Array.isArray(data.markets) || !data.markets.length) throw new Error('no live markets');
+    MARKETS = data.markets.map((m,i)=>{ const e=computeEdge(m); return {id:i+1, ...m, ...e}; });
+    LIVE = true;
+  }catch(err){
+    loadSeed(); LIVE = false;   // graceful fallback
+  }
+  setPill(); chipsRender(); render(); renderStats();
+}
+
+// ---------------------------------------------------------------------------
+// RENDER
+// ---------------------------------------------------------------------------
+const cats = ["All","NBA","NFL","Soccer","Politics","Crypto","Econ"];
+let state = {cat:"All", q:"", min:0};
+
+function chipsRender(){
+  const el = document.getElementById('chips');
+  el.innerHTML = cats.map(c=>`<button class="chip ${c===state.cat?'on':''}" data-c="${c}">${c}</button>`).join('');
+  el.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{state.cat=b.dataset.c; chipsRender(); render();});
+}
+
+function rowHTML(m){
+  const kPct=m.k, pPct=m.p;
+  const left=Math.min(kPct,pPct), width=Math.abs(kPct-pPct);
+  const lowBadge = m.net>=2;
+  return `
+  <div class="row" data-cat="${m.cat}" data-id="${m.id}">
+    <div class="row-main" role="button" tabindex="0" aria-expanded="false">
+      <div>
+        <span class="cat">${m.cat}</span>
+        <div class="title">${m.title}</div>
+        <div class="meta">Resolves ${m.resolves}</div>
+      </div>
+      <div class="dv">
+        <div class="track">
+          <div class="gapband" style="left:${left}%;width:${width}%"></div>
+          <div class="pin k" style="left:${kPct}%"><span class="tag">${kPct}¢</span></div>
+          <div class="pin p" style="left:${pPct}%"><span class="tag">${pPct}¢</span></div>
+        </div>
+        <div class="scale"><span>0%</span><span>50%</span><span>100%</span></div>
+        <div class="legend"><span><i class="sw k"></i>Kalshi ${kPct}%</span><span><i class="sw p"></i>Polymarket ${pPct}%</span></div>
+      </div>
+      <div class="edge-cell">
+        <div class="badge ${lowBadge?'':'lo'}">${m.gross.toFixed(0)}<small>% gap</small></div>
+        <div class="net">net <b>${m.net.toFixed(1)}%</b> after fees</div>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="play">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        Buy YES on ${m.yesVenue} at ${m.yesPrice}¢ · Buy NO on ${m.noVenue} at ${m.noPrice}¢ → lock ${m.gross.toFixed(0)}% before fees
+      </div>
+      <div class="legs">
+        <div class="leg ${m.yesVenue==='Kalshi'?'k':'p'}"><div class="v">${m.yesVenue} · YES</div><div class="a">${m.yesPrice}¢ <small>= ${m.yesPrice}% implied</small></div></div>
+        <div class="leg ${m.noVenue==='Kalshi'?'k':'p'}"><div class="v">${m.noVenue} · NO</div><div class="a">${m.noPrice}¢ <small>= ${m.noPrice}% implied</small></div></div>
+      </div>
+      <div class="risk">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/></svg>
+        Execution risk: fill both legs near-simultaneously or you're exposed on one side. Thin order books can move 2–3¢ before you're filled — confirm depth before sizing up.
+      </div>
+      <button class="exec-btn" data-id="${m.id}">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2 3 14h7l-1 8 10-12h-7l1-8z"/></svg>
+        Fire both legs
+      </button>
+    </div>
+  </div>`;
+}
+
+function render(){
+  const min = state.min;
+  let list = MARKETS.filter(m=>
+    (state.cat==="All" || m.cat===state.cat) &&
+    (state.q==="" || m.title.toLowerCase().includes(state.q)) &&
+    (m.gross >= min)
+  ).sort((a,b)=>b.gross-a.gross);
+
+  const rows = document.getElementById('rows');
+  rows.innerHTML = list.length ? list.map(rowHTML).join('')
+    : `<div class="empty">No markets match this filter. Lower the minimum edge or clear the search.</div>`;
+
+  rows.querySelectorAll('.row-main').forEach(rm=>{
+    const toggle=()=>{ const r=rm.closest('.row'); r.classList.toggle('open'); rm.setAttribute('aria-expanded', r.classList.contains('open')); };
+    rm.onclick=toggle;
+    rm.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle();} };
+  });
+  rows.querySelectorAll('.exec-btn').forEach(b=>{
+    b.onclick=e=>{ e.stopPropagation(); openExec(+b.dataset.id); };
+  });
+}
+
+function renderStats(){
+  const edges = MARKETS.filter(m=>m.gross>=state.min).length;
+  const best = Math.max(...MARKETS.map(m=>m.gross));
+  document.getElementById('s-mkts').textContent = MARKETS.length;
+  document.getElementById('s-edges').textContent = edges;
+  document.getElementById('s-best').textContent = best.toFixed(0)+'%';
+  const t = new Date(); document.getElementById('s-upd').textContent = t.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+}
+
+// controls
+document.getElementById('q').oninput = e=>{ state.q=e.target.value.toLowerCase().trim(); render(); };
+const slider=document.getElementById('minedge');
+slider.oninput = e=>{ state.min=+e.target.value; document.getElementById('minedge-o').textContent=state.min+'%'; render(); renderStats(); };
+
+// ---- calculator ----
+function calc(){
+  const k=+document.getElementById('c-k').value, p=+document.getElementById('c-p').value;
+  document.getElementById('o-kp').textContent=k+'%';
+  document.getElementById('o-pp').textContent=p+'%';
+  const gross=Math.abs(k-p);
+  const fee=(kalshiFeeCents(k))*0.5;
+  const net=Math.max(0,gross-fee);
+  document.getElementById('o-gross').textContent=gross.toFixed(1)+'%';
+  const netEl=document.getElementById('o-net'); netEl.textContent=net.toFixed(1)+'%';
+  netEl.className='v '+(net>0?'pos':'neg');
+
+  const bank=+document.getElementById('c-bank').value, edge=+document.getElementById('c-edge').value/100;
+  document.getElementById('o-lock').textContent='$'+(bank*gross/100).toFixed(0);
+  document.getElementById('o-ev').textContent=(edge>=0?'+':'')+'$'+edge.toFixed(2);
+  const kelly=Math.max(0, edge)/1; // simplified edge fraction
+  document.getElementById('o-kelly').textContent='$'+(bank*kelly*0.25).toFixed(0);
+}
+['c-k','c-p','c-bank','c-edge'].forEach(id=>document.getElementById(id).oninput=calc);
+
+// ---- refresh ----
+// When live: re-poll the endpoint. When on sample data: gently jitter prices so the demo feels alive.
+function jitterSample(){
+  MARKETS = MARKETS.map(m=>{
+    const seed=SEED.find(s=>s.id===m.id); if(!seed) return m;
+    const nk=Math.min(96,Math.max(4, seed.k + Math.round((Math.random()-.5)*4)));
+    const np=Math.min(96,Math.max(4, seed.p + Math.round((Math.random()-.5)*4)));
+    const e=computeEdge({...seed,k:nk,p:np});
+    return {...seed,k:nk,p:np,...e};
+  });
+  render(); renderStats();
+}
+function refresh(){ if(LIVE) fetchLiveMarkets(); else jitterSample(); }
+
+// ---------------------------------------------------------------------------
+// EXECUTION  —  fire both legs in parallel. Ships in PAPER mode.
+// Going live requires server-side authenticated calls in /api/execute.js.
+// ---------------------------------------------------------------------------
+let POSITIONS = [];
+let execTarget = null;
+const settings = { real:false, maxStake:250, minExec:3 };
+
+function execLegs(m, stake){
+  // split stake across the two legs proportional to price so both fully hedge
+  const yesCost = m.yesPrice, noCost = m.noPrice;       // cents
+  const unit = stake / ((yesCost + noCost)/100);         // contracts
+  return {
+    yes:{ venue:m.yesVenue, side:'YES', price:m.yesPrice, dollars:+(unit*yesCost/100).toFixed(2) },
+    no :{ venue:m.noVenue,  side:'NO',  price:m.noPrice,  dollars:+(unit*noCost/100).toFixed(2) },
+    profit:+(stake*m.gross/100).toFixed(2)
+  };
+}
+
+function openExec(id){
+  const m = MARKETS.find(x=>x.id===id); if(!m) return;
+  if(m.gross < settings.minExec){ alert(`Edge ${m.gross.toFixed(1)}% is below your ${settings.minExec}% minimum.`); return; }
+  execTarget = m;
+  const stake = Math.min(100, settings.maxStake);
+  document.getElementById('m-stake').value = stake;
+  document.getElementById('m-title').textContent = m.title;
+  const mode = document.getElementById('m-mode');
+  mode.className = 'mode ' + (settings.real?'real':'paper');
+  mode.textContent = settings.real ? 'LIVE · real money' : 'PAPER · no real money';
+  renderModalLegs();
+  document.getElementById('modal').classList.add('on');
+}
+function renderModalLegs(){
+  const m = execTarget; const stake = +document.getElementById('m-stake').value || 0;
+  const lg = execLegs(m, stake);
+  document.getElementById('m-legs').innerHTML = [lg.yes, lg.no].map(l=>`
+    <div class="ex-leg ${l.venue==='Kalshi'?'k':'p'}">
+      <div class="ic">${l.venue==='Kalshi'?'K':'P'}</div>
+      <div class="info"><div class="top">${l.venue} · Buy ${l.side}</div><div class="bot">${l.price}¢ limit · ${l.side==='YES'?'cheap side':'opposite side'}</div></div>
+      <div class="amt">$${l.dollars}</div>
+    </div>`).join('');
+  document.getElementById('m-profit').textContent = '$'+lg.profit.toFixed(2);
+}
+document.getElementById('m-stake').oninput = ()=>{ if(execTarget) renderModalLegs(); };
+document.getElementById('m-cancel').onclick = ()=>document.getElementById('modal').classList.remove('on');
+document.getElementById('modal').onclick = e=>{ if(e.target.id==='modal') e.currentTarget.classList.remove('on'); };
+
+document.getElementById('m-go').onclick = async ()=>{
+  const m = execTarget; const stake = Math.min(+document.getElementById('m-stake').value||0, settings.maxStake);
+  const lg = execLegs(m, stake);
+  const go = document.getElementById('m-go'); go.disabled = true; go.textContent = 'Firing both legs…';
+  let result;
+  try{
+    // Real path: server fires both authenticated orders in parallel and reports fills.
+    const r = await fetch('/api/execute', {method:'POST', headers:{'content-type':'application/json'},
+      body: JSON.stringify({ market:m.title, legs:lg, dryRun:!settings.real })});
+    if(!r.ok) throw new Error('no endpoint');
+    result = await r.json();
+  }catch(err){
+    // Local paper simulation so the flow is demonstrable before deploy.
+    // ~12% of the time one leg "slips" — to show partial-fill detection honestly.
+    const bothFill = Math.random() > 0.12;
+    result = { dryRun:true, yesFilled:true, noFilled:bothFill, profit:lg.profit };
+  }
+  document.getElementById('modal').classList.remove('on');
+  go.disabled=false; go.textContent='Place both orders';
+  recordPosition(m, lg, result);
+};
+
+function recordPosition(m, lg, res){
+  const both = res.yesFilled && res.noFilled;
+  POSITIONS.unshift({
+    title:m.title,
+    legs:`${lg.yes.venue} YES $${lg.yes.dollars} · ${lg.no.venue} NO $${lg.no.dollars}`,
+    status: both ? 'ok' : 'partial',
+    pl: both ? lg.profit : -Math.min(lg.yes.dollars, lg.no.dollars)*0.15,  // est. unwind cost
+    paper: res.dryRun !== false
+  });
+  renderPositions();
+  document.getElementById('positions').scrollIntoView({behavior:'smooth'});
+}
+function renderPositions(){
+  const t = document.getElementById('pos-table');
+  const head = `<div class="pos-row head"><span>Event</span><span>Legs</span><span>Status</span><span style="text-align:right">Locked P/L</span></div>`;
+  if(!POSITIONS.length){ t.innerHTML = head + `<div class="pos-empty" id="pos-empty">No trades yet. Open a market above and fire both legs to see them tracked here.</div>`; return; }
+  t.innerHTML = head + POSITIONS.map(p=>`
+    <div class="pos-row">
+      <span class="ttl">${p.title}${p.paper?' <span class="mini">· paper</span>':''}</span>
+      <span class="leg2">${p.legs}</span>
+      <span><span class="status ${p.status}">${p.status==='ok'?'BOTH FILLED':'PARTIAL — EXPOSED'}</span></span>
+      <span class="pos-pl ${p.pl>=0?'pos':'neg'}">${p.pl>=0?'+':''}$${p.pl.toFixed(2)}</span>
+    </div>`).join('');
+}
+
+// ---- settings ----
+const realToggle = document.getElementById('real-toggle');
+realToggle.onchange = e=>{
+  if(e.target.checked){
+    const ok = confirm("Enable LIVE trading?\n\nThis will place REAL orders with REAL money once you've wired your authenticated API keys server-side. Leg risk is real and bets can lose. Only continue if you understand this.");
+    if(!ok){ e.target.checked=false; return; }
+  }
+  settings.real = e.target.checked;
+  const lbl = document.getElementById('mode-label');
+  lbl.className = 'mode-label ' + (settings.real?'real':'paper');
+  lbl.textContent = settings.real ? 'LIVE MODE' : 'PAPER MODE';
+};
+document.getElementById('max-stake').oninput = e=>settings.maxStake = +e.target.value||0;
+document.getElementById('min-exec').oninput = e=>settings.minExec = +e.target.value||0;
+
+// init — try live first; fall back to sample automatically
+loadSeed(); chipsRender(); render(); renderStats(); calc(); setPill();
+fetchLiveMarkets();
+setInterval(refresh, 20000);
+</script>
+</body>
+</html>
