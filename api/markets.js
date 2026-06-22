@@ -1,6 +1,6 @@
 // api/markets.js  —  Vercel serverless function (Node 18+, global fetch)
-// Pulls live markets from Kalshi + Polymarket server-side, matches the same event
-// across venues, returns normalized JSON. Open /api/markets directly to debug.
+// Pulls live markets from Kalshi + Polymarket, matches the same event, returns JSON.
+// Open /api/markets directly to read the debug counts.
 
 const STOP = new Set("the a an to of in on for will be is are at by vs and or win wins reach above below before after team next this who what when 2024 2025 2026 2027".split(" "));
 function tokens(s){ return new Set(String(s||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(w=>w.length>2 && !STOP.has(w))); }
@@ -15,26 +15,41 @@ function guessCat(t){ t=t.toLowerCase();
   return "Other";
 }
 
-async function getKalshi(){
-  // PUBLIC market data — no auth. Official base per Kalshi docs.
-  const url = "https://external-api.kalshi.com/trade-api/v2/markets?limit=200&status=open";
-  const r = await fetch(url, { headers:{accept:"application/json"} });
-  if(!r.ok) throw new Error("kalshi HTTP "+r.status);
-  const j = await r.json();
-  return (j.markets||[]).map(m=>{
-    const bid=m.yes_bid, ask=m.yes_ask;
-    let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : (m.last_price!=null?m.last_price:null);
-    if(yes!=null && yes<=1) yes = yes*100;                  // handle dollar-scaled fields
-    return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves:(m.close_time||m.expiration_time||"").slice(0,10) };
-  }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
+// Try several known Kalshi hosts; return the first that yields markets. Records attempts.
+async function getKalshi(debug){
+  const hosts = [
+    "https://api.elections.kalshi.com/trade-api/v2/markets?limit=1000",
+    "https://external-api.kalshi.com/trade-api/v2/markets?limit=1000",
+    "https://trading-api.kalshi.com/trade-api/v2/markets?limit=1000",
+  ];
+  for(const url of hosts){
+    try{
+      const r = await fetch(url, { headers:{accept:"application/json"} });
+      const host = url.split("/")[2];
+      if(!r.ok){ debug.kalshiAttempts.push(host+" -> HTTP "+r.status); continue; }
+      const j = await r.json();
+      const raw = (j.markets||[]);
+      debug.kalshiAttempts.push(host+" -> "+raw.length+" raw");
+      if(!raw.length) continue;
+      const out = raw.map(m=>{
+        const bid=m.yes_bid, ask=m.yes_ask;
+        let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : (m.last_price!=null?m.last_price:null);
+        if(yes!=null && yes<=1) yes = yes*100;
+        return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves:(m.close_time||m.expiration_time||"").slice(0,10) };
+      }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
+      debug.kalshiHost = host;
+      return out;
+    }catch(e){ debug.kalshiAttempts.push("err "+String(e.message)); }
+  }
+  return [];
 }
 
-async function getPolymarket(){
-  // Gamma API — market data. JSON-string fields outcomePrices / outcomes.
-  const url = "https://gamma-api.polymarket.com/markets?closed=false&limit=400";
+async function getPolymarket(debug){
+  const url = "https://gamma-api.polymarket.com/markets?active=true&closed=false&order=volume24hr&ascending=false&limit=500";
   const r = await fetch(url, { headers:{accept:"application/json"} });
-  if(!r.ok) throw new Error("polymarket HTTP "+r.status);
+  if(!r.ok){ debug.errors.push("polymarket HTTP "+r.status); return []; }
   const arr = await r.json();
+  debug.polyRaw = (arr||[]).length;
   return (arr||[]).map(m=>{
     let prices, outs;
     try{ prices=JSON.parse(m.outcomePrices||"[]"); outs=JSON.parse(m.outcomes||"[]"); }catch{ return null; }
@@ -48,10 +63,10 @@ async function getPolymarket(){
 
 export default async function handler(req,res){
   res.setHeader("Cache-Control","s-maxage=20, stale-while-revalidate=40");
-  const debug = { kalshi:null, polymarket:null, errors:[] };
+  const debug = { kalshiHost:null, kalshiAttempts:[], polyRaw:null, errors:[] };
   let kalshi=[], poly=[];
-  try{ kalshi=await getKalshi(); debug.kalshi=kalshi.length; }catch(e){ debug.errors.push(String(e.message)); }
-  try{ poly=await getPolymarket(); debug.polymarket=poly.length; }catch(e){ debug.errors.push(String(e.message)); }
+  try{ kalshi=await getKalshi(debug); }catch(e){ debug.errors.push("kalshi "+String(e.message)); }
+  try{ poly=await getPolymarket(debug); }catch(e){ debug.errors.push("poly "+String(e.message)); }
 
   const THRESHOLD=0.5, pairs=[], used=new Set();
   for(const k of kalshi){
@@ -65,8 +80,8 @@ export default async function handler(req,res){
 
   res.status(200).json({
     live: pairs.length>0,
-    counts:{ kalshi:debug.kalshi, polymarket:debug.polymarket, matched:pairs.length },
-    errors: debug.errors,
+    counts:{ kalshi:kalshi.length, polymarket:poly.length, matched:pairs.length },
+    debug,
     markets: pairs.slice(0,60),
     updated:new Date().toISOString(),
   });
