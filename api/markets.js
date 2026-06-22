@@ -20,18 +20,35 @@ async function getKalshi(debug){
   const url = "https://api.kalshi.com/trade-api/v2/markets?limit=1000&status=open";
   try{
     const r = await fetch(url, { headers:{accept:"application/json"} });
-    if(!r.ok){ debug.errors.push("kalshi HTTP "+r.status); return []; }
-    const j = await r.json();
+    if(!r.ok){ 
+      debug.errors.push(`kalshi HTTP ${r.status}: ${r.statusText}`);
+      debug.kalshiUrl = url;
+      return []; 
+    }
+    const text = await r.text();
+    debug.kalshiRaw = text.slice(0, 200);
+    const j = JSON.parse(text);
     const raw = (j.markets||[]);
+    const now = new Date();
     debug.kalshiCount = raw.length;
     const out = raw.map(m=>{
+      // Skip closed/resolved markets
+      if(m.status !== 'open' && m.status !== 'active') return null;
+      // Skip markets past resolution date
+      const resolves = (m.close_time||m.expiration_time||"").slice(0,10);
+      if(resolves && new Date(resolves) <= now) return null;
+      
       const bid=m.yes_bid, ask=m.yes_ask;
       let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : (m.last_price!=null?m.last_price:null);
       if(yes!=null && yes<=1) yes = yes*100;
-      return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves:(m.close_time||m.expiration_time||"").slice(0,10) };
+      return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves };
     }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
     return out;
-  }catch(e){ debug.errors.push("kalshi "+String(e.message)); return []; }
+  }catch(e){ 
+    debug.errors.push("kalshi "+String(e.message)); 
+    debug.kalshiUrl = url;
+    return []; 
+  }
 }
 
 async function getPolymarket(debug){
@@ -40,15 +57,22 @@ async function getPolymarket(debug){
     const r = await fetch(url, { headers:{accept:"application/json"} });
     if(!r.ok){ debug.errors.push("polymarket HTTP "+r.status); return []; }
     const arr = await r.json();
+    const now = new Date();
     debug.polyCount = (arr||[]).length;
     return (arr||[]).map(m=>{
+      // Skip if already resolved
+      if(m.resolvedPrice !== null && m.resolvedPrice !== undefined) return null;
+      // Skip if past end date
+      const resolves = (m.endDate||"").slice(0,10);
+      if(resolves && new Date(resolves) <= now) return null;
+      
       let prices, outs;
       try{ prices=JSON.parse(m.outcomePrices||"[]"); outs=JSON.parse(m.outcomes||"[]"); }catch{ return null; }
       if(!Array.isArray(outs)||outs.length!==2) return null;
       if(!/yes/i.test(outs[0]) && !/yes/i.test(outs[1])) return null;
       const yi=/yes/i.test(outs[0])?0:1;
       const yes=Math.round(parseFloat(prices[yi])*100);
-      return isNaN(yes)?null:{ title:m.question, yes, resolves:(m.endDate||"").slice(0,10) };
+      return isNaN(yes)?null:{ title:m.question, yes, resolves };
     }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
   }catch(e){ debug.errors.push("polymarket "+String(e.message)); return []; }
 }
