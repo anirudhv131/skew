@@ -1,6 +1,6 @@
 // api/markets.js  —  Vercel serverless function (Node 18+, global fetch)
 // Pulls live markets from Kalshi + Polymarket, matches the same event, returns JSON.
-// Open /api/markets directly to read the debug counts.
+// Open /api/markets directly to read debug counts. ?sample=1 shows a raw Kalshi market.
 
 const STOP = new Set("the a an to of in on for will be is are at by vs and or win wins reach above below before after team next this who what when 2024 2025 2026 2027".split(" "));
 function tokens(s){ return new Set(String(s||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(w=>w.length>2 && !STOP.has(w))); }
@@ -15,12 +15,27 @@ function guessCat(t){ t=t.toLowerCase();
   return "Other";
 }
 
-// Try several known Kalshi hosts; return the first that yields markets. Records attempts.
+// Accept any price shape Kalshi uses: cents (44) or dollars (0.44), bid/ask or last.
+function kalshiYesCents(m){
+  const cand = [
+    m.yes_bid != null && m.yes_ask != null ? (m.yes_bid + m.yes_ask) / 2 : null,
+    m.last_price,
+    m.yes_bid, m.yes_ask,
+    m.yes_bid_dollars != null && m.yes_ask_dollars != null ? (m.yes_bid_dollars + m.yes_ask_dollars) / 2 * 100 : null,
+    m.last_price_dollars != null ? m.last_price_dollars * 100 : null,
+  ];
+  for(let v of cand){
+    if(v == null || isNaN(v)) continue;
+    if(v > 0 && v <= 1) v = v * 100;     // dollars -> cents
+    if(v > 1 && v < 100) return Math.round(v);
+  }
+  return null;
+}
+
 async function getKalshi(debug){
   const hosts = [
     "https://api.elections.kalshi.com/trade-api/v2/markets?limit=1000",
     "https://external-api.kalshi.com/trade-api/v2/markets?limit=1000",
-    "https://trading-api.kalshi.com/trade-api/v2/markets?limit=1000",
   ];
   for(const url of hosts){
     try{
@@ -31,13 +46,12 @@ async function getKalshi(debug){
       const raw = (j.markets||[]);
       debug.kalshiAttempts.push(host+" -> "+raw.length+" raw");
       if(!raw.length) continue;
+      if(!debug.kalshiSampleKeys && raw[0]) debug.kalshiSampleKeys = Object.keys(raw[0]);
       const out = raw.map(m=>{
-        const bid=m.yes_bid, ask=m.yes_ask;
-        let yes = (bid!=null && ask!=null && (bid+ask)>0) ? (bid+ask)/2 : (m.last_price!=null?m.last_price:null);
-        if(yes!=null && yes<=1) yes = yes*100;
-        return yes==null ? null : { title:(m.title||m.yes_sub_title||m.ticker), yes:Math.round(yes), resolves:(m.close_time||m.expiration_time||"").slice(0,10) };
-      }).filter(Boolean).filter(m=>m.yes>2 && m.yes<98);
-      debug.kalshiHost = host;
+        const yes = kalshiYesCents(m);
+        return yes==null ? null : { title:(m.title||m.yes_sub_title||m.subtitle||m.ticker), yes, resolves:(m.close_time||m.expiration_time||"").slice(0,10) };
+      }).filter(Boolean);
+      debug.kalshiHost = host; debug.kalshiKept = out.length;
       return out;
     }catch(e){ debug.kalshiAttempts.push("err "+String(e.message)); }
   }
@@ -63,7 +77,7 @@ async function getPolymarket(debug){
 
 export default async function handler(req,res){
   res.setHeader("Cache-Control","s-maxage=20, stale-while-revalidate=40");
-  const debug = { kalshiHost:null, kalshiAttempts:[], polyRaw:null, errors:[] };
+  const debug = { kalshiHost:null, kalshiAttempts:[], kalshiKept:null, kalshiSampleKeys:null, polyRaw:null, errors:[] };
   let kalshi=[], poly=[];
   try{ kalshi=await getKalshi(debug); }catch(e){ debug.errors.push("kalshi "+String(e.message)); }
   try{ poly=await getPolymarket(debug); }catch(e){ debug.errors.push("poly "+String(e.message)); }
@@ -73,7 +87,7 @@ export default async function handler(req,res){
     let best=null, score=THRESHOLD;
     for(let i=0;i<poly.length;i++){ if(used.has(i)) continue; const s=similarity(k.title,poly[i].title); if(s>score){score=s;best=i;} }
     if(best!=null){ used.add(best); const p=poly[best];
-      pairs.push({ cat:guessCat(k.title+" "+p.title), title:k.title.replace(/^will (the )?/i,"").replace(/\?$/,""), resolves:k.resolves||p.resolves||"", k:k.yes, p:p.yes, match:+score.toFixed(2) });
+      pairs.push({ cat:guessCat(k.title+" "+p.title), title:String(k.title).replace(/^will (the )?/i,"").replace(/\?$/,""), resolves:k.resolves||p.resolves||"", k:k.yes, p:p.yes, match:+score.toFixed(2) });
     }
   }
   pairs.sort((a,b)=>Math.abs(b.k-b.p)-Math.abs(a.k-a.p));
